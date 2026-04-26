@@ -32,25 +32,30 @@ def run_agent_turn(
     tools: list,
     trusted_tools: set,
     recently_denied: set,
-) -> str:
+) -> dict:
     """
     执行一轮 Agent 推理，直到 LLM 返回 finish_reason=stop 或达到 MAX_TOOL_TURNS。
     会原地修改 messages，保留完整对话历史以支持多轮对话。
-    返回 stop_reason: 'stop' | 'max_turns_reached'
+    返回 dict: {"stop_reason": str, "input_tokens": int, "output_tokens": int}
 
     流程:
       LLM 推理 → finish_reason=tool_calls → 执行工具 → 回传结果 → 继续推理
                 → finish_reason=stop      → 对话结束
     """
-    finish_reason = None
-    tool_turn_count = 0  # 工具调用轮次计数器
+    finish_reason   = None
+    tool_turn_count = 0
+    # 本轮累计的真实 token 用量（从 API 响应最后一个 chunk 读取）
+    total_input_tokens  = 0
+    total_output_tokens = 0
 
     while finish_reason != "stop":
         # 死循环保护：超过最大工具调用轮次则强制终止
         # 对标 claw-code: query_engine.py submit_message() 里的 max_turns 检查
         if tool_turn_count >= MAX_TOOL_TURNS:
             print(f"\n[WARN] 已达到最大工具调用轮次 ({MAX_TOOL_TURNS})，强制终止本轮推理")
-            return "max_turns_reached"
+            return {"stop_reason": "max_turns_reached",
+                    "input_tokens": total_input_tokens,
+                    "output_tokens": total_output_tokens}
 
         # ----- 发起流式请求 -----
         stream = client.chat.completions.create(
@@ -78,6 +83,17 @@ def run_agent_turn(
             rc_delta = getattr(delta, "reasoning_content", None)
             if rc_delta:
                 reasoning_content += rc_delta
+
+            # usage 只在最后一个 chunk 出现，其余 chunk 该字段为 None
+            # 注意：Moonshot API 会把 usage 放在 chunk.choices[0].usage 里（而不是 chunk.usage）
+            usage = getattr(chunk.choices[0], "usage", None)
+            if usage:
+                if isinstance(usage, dict):  # 如果是字典
+                    total_input_tokens  += usage.get("prompt_tokens", 0)
+                    total_output_tokens += usage.get("completion_tokens", 0)
+                else:                        # 如果是对象
+                    total_input_tokens  += getattr(usage, "prompt_tokens", 0)
+                    total_output_tokens += getattr(usage, "completion_tokens", 0)
 
             # tool_calls 分片拼接
             # 注意：id/name 只在首个 chunk 出现，arguments 分片累积
@@ -130,12 +146,20 @@ def run_agent_turn(
                 print(f"\n🔧 调用工具: {name}  参数: {args}")
                 result = execute_tool(name, args, trusted_tools, recently_denied)
                 print(f"   返回: {result}")
-
+                result_str = json.dumps(result, ensure_ascii=False)
+                
+                # 如果单次工具输出超过 1 万字符，因为前面外部截断无法处理工具的返回结果，工具返回可能会超过上下文长度
+                # 所以这里需要截断工具的返回结果
+                if len(result_str) > 10000:
+                    truncated_msg = result_str[:10000] + "\n\n...[警告：输出过长已被截断，请使用 search_file 等工具精确查找]"
+                else:
+                    truncated_msg = result_str
+                
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
                     "name": name,
-                    "content": json.dumps(result, ensure_ascii=False),
+                    "content": truncated_msg,
                 })
 
         else:
@@ -144,4 +168,8 @@ def run_agent_turn(
             if finish_reason == "stop":
                 print()  # 补换行
 
-    return "stop"
+    return {
+        "stop_reason":    "stop",
+        "input_tokens":  total_input_tokens,
+        "output_tokens": total_output_tokens,
+    }

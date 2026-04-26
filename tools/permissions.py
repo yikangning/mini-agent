@@ -18,8 +18,8 @@ from tools.implementations import TOOL_MAP
 # 对标 claw-code: PermissionEnforcer 的 READ_ONLY / workspace-write / execute 三层
 # ---------------------------------------------------------------------------
 
-READ_ONLY = {"get_current_time", "read_file", "list_files"}
-WRITE     = {"write_file"}
+READ_ONLY = {"get_current_time", "read_file", "list_files","search_file"}
+WRITE     = {"write_file","edit_file"}
 EXECUTE   = {"run_bash"}
 
 
@@ -41,7 +41,7 @@ def _ask_user(tool_name: str, args: dict, trusted_tools: set,allow_trust=True) -
         trusted_tools.add(tool_name)
         print(f"   ✅ [{tool_name}] 已加入本会话信任列表")
         return True
-    elif choic == a and not allow_trust:
+    elif choice == "a" and not allow_trust:
         return True
     elif choice == "y":
         return True

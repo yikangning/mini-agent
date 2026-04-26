@@ -9,6 +9,7 @@ tools/implementations.py
 """
 
 import os
+import re
 import subprocess
 from datetime import datetime
 
@@ -28,6 +29,13 @@ _DANGEROUS_PATTERNS = [
     ("dd if=",       "磁盘写入"),
 ]
 
+# 获取当前工作区的绝对路径
+WORKSPACE_DIR = os.path.abspath(".")
+def is_path_safe(target_path: str) -> bool:
+    """检查目标路径是否被限制在当前工作区内（防止 ../../ 逃逸）"""
+    abs_target = os.path.abspath(target_path)
+    # 如果目标路径是以 WORKSPACE_DIR 为前缀，说明是安全的
+    return abs_target.startswith(WORKSPACE_DIR)
 
 def is_command_safe(command: str) -> tuple[bool, str]:
     """静态检查命令是否安全，返回 (是否安全, 拒绝原因)。"""
@@ -47,7 +55,9 @@ def tool_get_current_time(args: dict) -> str:
 
 def tool_read_file(args: dict) -> dict:
     path = args["path"]
-    try:
+    if not is_path_safe(path):
+        return {"error": "安全限制：禁止访问工作区以外的文件！"}
+    try:    
         content = open(path, encoding="utf-8").read()
         return {"content": content}
     except Exception as e:
@@ -64,6 +74,8 @@ def tool_list_files(args: dict) -> dict:
 
 def tool_write_file(args: dict) -> dict:
     path, content = args["path"], args["content"]
+    if not is_path_safe(path):
+        return {"error": "安全限制：禁止写入工作区以外的文件！"}
     try:
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
@@ -101,6 +113,8 @@ def tool_edit_file(args: dict) -> dict:
     path    = args["path"]
     old_str = args["old_str"]
     new_str = args["new_str"]
+    if not is_path_safe(path):
+        return {"error": "安全限制：禁止编辑工作区以外的文件！"}
     try:
         original = open(path, encoding="utf-8").read()
     except Exception as e:
@@ -108,7 +122,14 @@ def tool_edit_file(args: dict) -> dict:
 
     count = original.count(old_str)
     if count == 0:
-        return {"error": "old_str 在文件中不存在，请用 read_file 确认内容后重试"}
+        # 去除所有空白字符后再试一次
+        strip_original = re.sub(r'\s+', '', original)
+        strip_old = re.sub(r'\s+', '', old_str)
+        
+        if strip_old in strip_original:
+            return {"error": "old_str 在文件中未找到完全匹配。但忽略空白符后找到了匹配项，这说明你的【缩进、空格或换行】有微小错误。请务必使用 search_file 仔细确认原本的精确格式再重试！"}
+        else:
+            return {"error": "old_str 在文件中完全不存在，请用 search_file 确认文件真实内容后重试"}
     if count > 1:
         return {"error": f"old_str 在文件中出现了 {count} 次，必须唯一。请提供更多上下文以精确定位"}
 
@@ -132,6 +153,8 @@ def tool_edit_file(args: dict) -> dict:
 def tool_search_file(args: dict) -> dict:
     path    = args["path"]
     pattern = args["pattern"]
+    if not is_path_safe(path):
+        return {"error": "安全限制：禁止搜索工作区以外的文件！"}
     try:
         lines = open(path, encoding="utf-8").readlines()
     except Exception as e:

@@ -53,7 +53,7 @@ class StoredSession:
     session_id:    str
     created_at:    str                # ISO 8601 时间戳
     messages:      list[dict]         # 完整对话历史
-    input_tokens:  int = 0
+    # input_tokens:  int = 0
     output_tokens: int = 0
 
 
@@ -81,7 +81,12 @@ def load_session(session_id: str, directory: Path | None = None) -> StoredSessio
     if not path.exists():
         raise FileNotFoundError(f"会话不存在: {session_id}  (查找路径: {path})")
     data = json.loads(path.read_text())
-    return StoredSession(**data)
+    valid_keys = StoredSession.__dataclass_fields__.keys()
+    filtered_data = {}
+    for k, v in data.items():
+        if k in valid_keys:
+            filtered_data[k] = v
+    return StoredSession(**filtered_data)
 
 
 def list_sessions(directory: Path | None = None) -> list[StoredSession]:
@@ -93,7 +98,12 @@ def list_sessions(directory: Path | None = None) -> list[StoredSession]:
     for path in target_dir.glob("*.json"):
         try:
             data = json.loads(path.read_text())
-            sessions.append(StoredSession(**data))
+            valid_keys = StoredSession.__dataclass_fields__.keys()
+            filtered_data = {}
+            for k, v in data.items():
+                if k in valid_keys:
+                    filtered_data[k] = v
+            sessions.append(StoredSession(**filtered_data))
         except Exception:
             continue  # 跳过损坏的文件
     return sorted(sessions, key=lambda s: s.created_at, reverse=True)

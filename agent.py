@@ -129,8 +129,8 @@ def main():
             print("[COMPRESS] 上下文过长，开始压缩...")
             messages = compress_messages(messages, client, MODEL)
 
-        # 执行 Agent 推理
-        stop_reason = run_agent_turn(
+        # 执行 Agent 推理，获取结果（含真实 token 用量）
+        result = run_agent_turn(
             messages=messages,
             client=client,
             model=MODEL,
@@ -139,7 +139,11 @@ def main():
             recently_denied=recently_denied,
         )
 
-        if stop_reason == "max_turns_reached":
+        # 更新 token 用量统计
+        usage.add(result["input_tokens"], result["output_tokens"])
+        print(f"[TOKEN] 本轮: in={result['input_tokens']} out={result['output_tokens']} | 累计: {usage}")
+
+        if result["stop_reason"] == "max_turns_reached":
             print("[WARN] 本轮因达到最大工具调用次数而终止，对话历史已保留。")
 
         # 每轮对话结束后自动保存会话
