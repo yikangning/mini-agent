@@ -23,7 +23,7 @@ WRITE     = {"write_file"}
 EXECUTE   = {"run_bash"}
 
 
-def _ask_user(tool_name: str, args: dict, trusted_tools: set) -> bool:
+def _ask_user(tool_name: str, args: dict, trusted_tools: set,allow_trust=True) -> bool:
     """
     向用户展示操作详情并询问是否允许。
       y = 本次允许
@@ -32,10 +32,16 @@ def _ask_user(tool_name: str, args: dict, trusted_tools: set) -> bool:
     """
     print(f"\n⚠️  Agent 请求执行: [{tool_name}]")
     print(f"   参数: {json.dumps(args, ensure_ascii=False, indent=2)}")
-    choice = input("是否允许? (y=允许一次 / a=始终允许 / n=拒绝): ").strip().lower()
-    if choice == "a":
+    if allow_trust:
+        prompt = "是否允许? (y=允许一次 / a=始终允许 / n=拒绝): "
+    else :
+        prompt = "是否允许? (y=允许一次 / n=拒绝): "
+    choice = input(prompt).strip().lower()
+    if choice == "a" and allow_trust:
         trusted_tools.add(tool_name)
         print(f"   ✅ [{tool_name}] 已加入本会话信任列表")
+        return True
+    elif choic == a and not allow_trust:
         return True
     elif choice == "y":
         return True
@@ -73,7 +79,7 @@ def execute_tool(
 
     # 执行类 → 每次询问（即使已信任也问，最高风险）
     if name in EXECUTE:
-        if name not in trusted_tools and not _ask_user(name, args, trusted_tools):
+        if  not _ask_user(name, args, trusted_tools,allow_trust=False):
             recently_denied.add(deny_key)
             return {"error": "用户拒绝"}
 
