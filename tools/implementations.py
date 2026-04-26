@@ -97,68 +97,6 @@ def tool_run_bash(args: dict) -> dict:
         return {"error": f"执行失败: {e}"}
 
 
-def tool_edit_file(args: dict) -> dict:
-    """
-    str_replace 风格的精准局部替换。
-    对标 claw-code: rust/crates/runtime/src/file_ops.rs 的 edit 操作
-    以及原版 Claude Code 的 str_replace_editor 工具。
-
-    核心约束:
-      - old_str 必须在文件中恰好出现 1 次（唯一性保证，防止误改）
-      - 替换成功后返回简短 diff 预览
-    """
-    path     = args["path"]
-    old_str  = args["old_str"]
-    new_str  = args["new_str"]
-
-    try:
-        original = open(path, encoding="utf-8").read()
-    except Exception as e:
-        return {"error": f"读取文件失败: {e}"}
-
-    count = original.count(old_str)
-    if count == 0:
-        return {"error": "old_str 在文件中不存在，请用 read_file 确认内容后重试"}
-    if count > 1:
-        return {"error": f"old_str 在文件中出现了 {count} 次，必须唯一。请提供更多上下文以精确定位"}
-
-    updated = original.replace(old_str, new_str, 1)
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(updated)
-    except Exception as e:
-        return {"error": f"写入失败: {e}"}
-
-    # 生成简短 diff 预览（前 5 行）
-    old_lines = old_str.splitlines()[:5]
-    new_lines = new_str.splitlines()[:5]
-    diff_preview = (
-        "\n".join(f"- {l}" for l in old_lines)
-        + "\n"
-        + "\n".join(f"+ {l}" for l in new_lines)
-    )
-    return {"status": "success", "diff_preview": diff_preview}
-
-
-def tool_search_file(args: dict) -> dict:
-    """在文件中搜索字符串，返回匹配的行号和内容。"""
-    path    = args["path"]
-    pattern = args["pattern"]
-    try:
-        lines = open(path, encoding="utf-8").readlines()
-    except Exception as e:
-        return {"error": f"读取失败: {e}"}
-
-    matches = [
-        {"line": i + 1, "content": line.rstrip()}
-        for i, line in enumerate(lines)
-        if pattern in line
-    ]
-    if not matches:
-        return {"found": False, "message": f"未找到 '{pattern}'"}
-    return {"found": True, "matches": matches, "total": len(matches)}
-
-
 # ---------------------------------------------------------------------------
 # 工具名 → 函数 映射表（注册表）
 # 扩展方式: 新增工具时在这里加一行
@@ -170,6 +108,4 @@ TOOL_MAP: dict[str, callable] = {
     "list_files":       tool_list_files,
     "write_file":       tool_write_file,
     "run_bash":         tool_run_bash,
-    "edit_file":        tool_edit_file,
-    "search_file":      tool_search_file,
 }
