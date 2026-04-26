@@ -92,4 +92,55 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": (
+                "对文件进行精准的局部替换。将 old_str 替换为 new_str，"
+                "要求 old_str 在文件中唯一存在。"
+                "适用于修改部分代码，而不是重写整个文件。"
+                "修改前请先用 read_file 确认 old_str 的确切内容。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "要编辑的文件路径",
+                    },
+                    "old_str": {
+                        "type": "string",
+                        "description": "要替换的原始内容，必须在文件中唯一存在",
+                    },
+                    "new_str": {
+                        "type": "string",
+                        "description": "替换后的新内容",
+                    },
+                },
+                "required": ["path", "old_str", "new_str"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_file",
+            "description": "在文件中搜索指定内容，返回匹配的行号和内容。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "要搜索的文件路径",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "要搜索的内容（字符串，非正则）",
+                    },
+                },
+                "required": ["path", "pattern"],
+            },
+        },
+    },
 ]
